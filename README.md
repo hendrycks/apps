@@ -6,6 +6,8 @@ Download the [**APPS dataset here**](https://people.eecs.berkeley.edu/~hendrycks
 
 This repository contains evaluation code.
 
+For other benchmarks of enormous Transformers, see the a dataset which tests ability in competition [MATH](https://github.com/hendrycks/math), a dataset which tests knowledge of [ETHICS](https://github.com/hendrycks/ethics), and [a dataset spanning 50+ academic subjects](https://github.com/hendrycks/test).
+
 ## Citation
 
 If you find this useful in your research, please consider citing
