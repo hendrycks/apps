@@ -1,0 +1,8 @@
+numpy
+pyext>=0.7
+sacrebleu # we used 1.5.1
+sacremoses # we used 0.0.45
+tensorflow # requires tensorflow 2.0 or above for transformers
+torch>=1.7
+transformers>=4 
+

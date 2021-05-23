@@ -48,7 +48,7 @@ def reindent_code(codestr):
 
     return ret.getvalue()
 
-def generate_prompt(test_case_path, prompt_path, solutions_path, tokenizer, starter_path=None):
+def generate_prompt(args, test_case_path, prompt_path, solutions_path, tokenizer, starter_path=None):
     _input = "\nQUESTION:\n"
     with open(prompt_path, "r") as f:
         data = f.readlines()
@@ -82,13 +82,21 @@ def generate_prompt(test_case_path, prompt_path, solutions_path, tokenizer, star
 
         # Choose the shortest solution for the model to use.
         # This is so we can conserve tokens (1024 max)
-        sample_sol = min(sols, key=len)
-        
-        # Add args.peeking% of that solution to the prompt
-        sample_sol_token_ids = tokenizer.encode(sample_sol, verbose=False)
-        num_to_keep = int(len(sample_sol_token_ids) * args.peeking)
-        sample_sol_token_ids = sample_sol_token_ids[:num_to_keep]
-        _input += tokenizer.decode(sample_sol_token_ids)
+        # sample_sol = min(sols, key=len)
+
+        # # Add args.peeking% of that solution to the prompt
+        # sample_sol_token_ids = tokenizer.encode(sample_sol, verbose=False)
+        # num_to_keep = int(len(sample_sol_token_ids) * args.peeking)
+        # sample_sol_token_ids = sample_sol_token_ids[:num_to_keep]
+        # _input += tokenizer.decode(sample_sol_token_ids)
+
+        # Alternatively take a random solution
+        sample_sol = random.choice(sols)
+        rand_sol = reindent_code(sample_sol)
+        rand_sol = tokenizer.encode(rand_sol, verbose=False)
+        tokens_taken = int(args.peek_frac * len(rand_sol))
+        rand_sol = rand_sol[:tokens_taken]
+        _input += tokenizer.decode(rand_sol)
     else:
         sample_sol = None
 
@@ -100,15 +108,17 @@ def main(args):
     argsdict = vars(args)
     print(pprint.pformat(argsdict))
 
-    problems = os.listdir(args.test_loc)
+    with open(args.test_loc, "r") as f:
+        problems = json.load(f)
     problems = sorted(problems) # Pin some ordering
 
     gpt_codes = {}
-    os.makedirs(args.save, exist_ok=True)
+    if not os.path.exists(args.save):
+        os.makedirs(args.save, exist_ok=True)
     if not args.end:
         codes_loc = os.path.join(args.save, f"all_codes.json")
     else:
-        codes_loc = os.path.join(args.save, f"gpt_{args.start}-{args.end}_codes.json")
+        codes_loc = os.path.join(args.save, f"{args.start}-{args.end}_codes.json")
 
     # Only do the problems that are specified.
     if args.index:
@@ -124,16 +134,20 @@ def main(args):
             end = args.end
         problems = problems[start:end]
 
+    # Tokenizer
+    tokenizer = transformers.GPT2Tokenizer.from_pretrained(args.arch)
+
+    # Set up model
     print("Loading model...")
-    model = transformers.GPT2LMHeadModel.from_pretrained(args.load).cuda()
-    tokenizer = transformers.GPT2Tokenizer.from_pretrained('gpt2-xl')
+    model = transformers.GPT2LMHeadModel.from_pretrained(args.load)
+    model.cuda()
+    print(f"Loaded {args.load}.")
 
     # main eval loop
     for index, problem in enumerate(tqdm(problems)):
+        prob_path = os.path.join(args.root, problem)
         if args.debug:
-            print(f"problem path = {problem}")
-
-        prob_path = os.path.join(args.test_loc, problem)
+            print(f"problem path = {prob_path}")
 
         test_case_path = os.path.join(prob_path, "input_output.json")
         prompt_path = os.path.join(prob_path, "question.txt")
@@ -145,23 +159,23 @@ def main(args):
             continue
 
         # Read the question in
-        prompt_text, sample_sol = generate_prompt(test_case_path, prompt_path, solutions_path, tokenizer, starter_path)
+        prompt_text, sample_sol = generate_prompt(args, test_case_path, prompt_path, solutions_path, tokenizer, starter_path)
         if args.debug:
             print("PROMPT_TEXT:")
             print(prompt_text)
         
         # Feed this into the model.
+        start = time.time()
         try:
-            start = time.time()
-            input_ids = torch.LongTensor(tokenizer.encode(prompt_text, verbose=False)).unsqueeze(0).cuda()
-            output_ids = model.generate(
-                input_ids,
-                num_beams=args.num_beams,
-                early_stopping=True,
-                max_length=1024 - len(input_ids)
-            )
-            output_str = tokenizer.decode(output_ids[0])
-            end = time.time()
+            with torch.no_grad():
+                input_ids = torch.LongTensor(tokenizer.encode(prompt_text, verbose=False)).unsqueeze(0).cuda()
+                output_ids = model.generate(
+                    input_ids,
+                    num_beams=args.num_beams,
+                    early_stopping=True,
+                    max_length=1024 - len(input_ids)
+                )
+                output_str = tokenizer.decode(output_ids[0])
         except Exception as e:
             if isinstance(e, UnboundLocalError) and str(e) == "local variable 'next_tokens' referenced before assignment":
                 # See https://github.com/huggingface/transformers/issues/5118
@@ -173,7 +187,7 @@ def main(args):
                 print(e)
             # Default to empty string on errors
             output_str = ""
-            
+        end = time.time()
 
         if args.peeking == 1.0:
             output_str = sample_sol
@@ -197,15 +211,17 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Run a tranined model to generate Python code.")
-    parser.add_argument("-t","--test_loc", default="/data/user/apps-beta/test", type=str)
+    parser.add_argument("--arch", default="gpt2", choices=transformers.GPT2_PRETRAINED_MODEL_ARCHIVE_LIST)
+    parser.add_argument("-t","--test_loc", default="~/apps-beta/data_split/test.json", type=str)
+    parser.add_argument("-r","--root", default="../", type=str, help="where the data is stored.")
+    parser.add_argument("-l","--load", default="~/apps-beta/models/checkpoints/final", type=str)
     parser.add_argument("--peeking", default=0.0, type=float)
     parser.add_argument("--num-beams", default=5, type=int)
     parser.add_argument("-s","--start", default=0, type=int)
     parser.add_argument("-e","--end", default=None, type=int)
     parser.add_argument("-i", "--index", default=None, type=int)
-    parser.add_argument("-lp","--load_prev", action="store_true")
     parser.add_argument("-d", "--debug", action="store_true")
-    parser.add_argument("--save", type=str, default="TEMP_RESULTS")
+    parser.add_argument("--save", type=str, default="./results")
  
     args = parser.parse_args()
 

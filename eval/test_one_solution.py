@@ -19,26 +19,28 @@ from tqdm import tqdm
 
 from typing import List
 
-def print_results(results, num_progs):
+def print_results(results, args):
     res = []
+    all_correct = []
     for index in results:
        res.extend(results[index])
+       all_correct.append(np.all(results[index]))
     tmp_results = res
-    tmp_results = np.copy(tmp_results)
     compile_errors = len(tmp_results[tmp_results==-2])
     runtime_errors = len(tmp_results[tmp_results==-1])
-    successes = tmp_results[tmp_results>=0]
-    print(f"number of compile errors = {compile_errors} avg amount = {compile_errors / num_progs}")
-    print(f"number of runtime errors = {runtime_errors} avg = {runtime_errors / num_progs}")
-    print(f"number of test cases run = {len(successes)} ACC (correct / total) = {np.sum(successes) / num_progs}")
+    failures = len(tmp_results[tmp_results==False])
+    successes = len(tmp_results[tmp_results==True])
+    total_testcases = len(res)
+    if args.debug:
+        print(f"number of compile errors = {compile_errors} avg = {compile_errors / total_testcases }")
+        print(f"number of runtime errors = {runtime_errors} avg = {runtime_errors / total_testcases}")
+        print(f"number of test cases run = {total_testcases}")
+
+    print(f"Test Case Average (correct / total test cases) = {successes / total_testcases}")
+    print(f"Strict Accuracy (all test cases passed / total problems) = {np.mean(all_correct)}")
 
 
-
-def main(args):
-
-    argsdict = vars(args)
-    print(pprint.pformat(argsdict))
-
+def eval_and_save_problems(args):
     with open(args.test_loc, "r") as f:
         problems = json.load(f)
 
@@ -49,12 +51,12 @@ def main(args):
     results = {}
     codes_loc = os.path.join(args.save, f"all_codes.json")
     if not os.path.exists(codes_loc):
-        codes_loc = os.path.join(args.save, f"gpt_{args.start}-{args.end}_codes.json")
+        codes_loc = os.path.join(args.save, f"{args.start}-{args.end}_codes.json")
 
     if os.path.exists(codes_loc):
-        results_loc = os.path.join(args.save, f"gpt2_all_results.json") 
+        results_loc = os.path.join(args.save, f"all_results.json") 
     else:
-        results_loc = os.path.join(args.save, f"gpt2_{args.start}-{args.end}_results.json") 
+        results_loc = os.path.join(args.save, f"{args.start}-{args.end}_results.json") 
     print(codes_loc, results_loc)
 
     with open(codes_loc, "r") as f: 
@@ -120,18 +122,37 @@ def main(args):
         if args.debug:
             print(f"\nHow to read results [-2] = compile error, [-1] = runtime error [False] = failed test case [True] = passed test case")
             #print(f"results = {res}")
-
  
         results[index+args.start+args.index] = res
         
         with open(results_loc, "w") as f:
             try:
-                print("saving")
                 f.write(json.dumps(results))
             except Exception as e:
                 import pdb; pdb.set_trace()
-                print("didn't save")
+                print("didn't save problem due to {e}")
 
+    return results
+
+
+def main(args):
+
+    argsdict = vars(args)
+    print(pprint.pformat(argsdict))
+
+    if args.print_results:
+        results = {}
+        codes_loc = os.path.join(args.save, f"all_codes.json")
+        if os.path.exists(codes_loc):
+            results_loc = os.path.join(args.save, f"all_results.json") 
+        else:
+            results_loc = os.path.join(args.save, f"{args.start}-{args.end}_results.json") 
+        with open(results_loc, "r") as f: 
+            results = json.load(f)
+    else:
+        results = eval_and_save_problems(args)
+
+    print_results(results, args)
 
 
 if __name__ == "__main__":
@@ -141,12 +162,11 @@ if __name__ == "__main__":
     parser.add_argument("-t","--test_loc", default="../data_split/test.json", type=str, help="path to the json containing problem paths to be evaluated.")
     parser.add_argument("-r","--root", default="../", type=str, help="where the data is stored.")
     parser.add_argument("-s","--start", default=0, type=int)
-    parser.add_argument("-e","--end", default=None, type=int)
+    parser.add_argument("-e","--end", default=None, type=int, help="If you want to evaluate a subset of problems specify start and ending index. File with start and ending prefix must exist typically used with batch evaluation.")
     parser.add_argument("-i", "--index", default=0, type=int)
-    parser.add_argument("-lp","--load_prev", action="store_true")
+    parser.add_argument("-p", "--print_results", action="store_true", help="If you have already evaluated the results and only want to print them.")
     parser.add_argument("-d", "--debug", action="store_true")
-    parser.add_argument("--save", type=str, default="../results_all")
-    parser.add_argument("--index-override", default=None, type=int)
+    parser.add_argument("--save", type=str, default="./results", help="Where the evaluated data is loaded from and results saved to.")
     parser.add_argument("--stop-early", default=None, type=int)
  
     args = parser.parse_args()
