@@ -6,7 +6,9 @@ Download the [**APPS dataset here**](https://people.eecs.berkeley.edu/~hendrycks
 
 This repository contains evaluation code.
 
-For other benchmarks of enormous Transformers, see a dataset which tests ability in competition [MATH](https://github.com/hendrycks/math), a dataset which tests knowledge of [ETHICS](https://github.com/hendrycks/ethics), and [a dataset spanning 50+ academic subjects](https://github.com/hendrycks/test).
+Fine-tuned GPT-2 1.5B and GPT-Neo 2.7B weights are available [here](https://drive.google.com/file/d/1XW1Od9L-5l9zXl1HUCyER5pS9zQTbIvU/view?usp=sharing).
+
+For other benchmarks of enormous Transformers, see a dataset which tests ability in [competition math](https://github.com/hendrycks/math), a dataset which tests knowledge of [ethics](https://github.com/hendrycks/ethics), and [a dataset spanning 50+ academic subjects](https://github.com/hendrycks/test).
 
 ## Citation
 
