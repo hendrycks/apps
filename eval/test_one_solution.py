@@ -21,9 +21,11 @@ from typing import List
 
 def print_results(results, args):
     res = []
+    per_prob_res = []
     all_correct = []
     for index in results:
        res.extend(results[index])
+       per_prob_res.append(np.mean(results[index]))
        all_correct.append(np.all(results[index]))
     tmp_results = res
     compile_errors = len(tmp_results[tmp_results==-2])
@@ -36,7 +38,7 @@ def print_results(results, args):
         print(f"number of runtime errors = {runtime_errors} avg = {runtime_errors / total_testcases}")
         print(f"number of test cases run = {total_testcases}")
 
-    print(f"Test Case Average (correct / total test cases) = {successes / total_testcases}")
+    print(f"Test Case Average (average accuracy over problems) = {np.mean(per_prob_res)}")
     print(f"Strict Accuracy (all test cases passed / total problems) = {np.mean(all_correct)}")
 
 
@@ -158,7 +160,7 @@ def main(args):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Language Modelling on Code")
+    parser = argparse.ArgumentParser(description="Testing a Language Model on Python Code")
     parser.add_argument("-t","--test_loc", default="../data_split/test.json", type=str, help="path to the json containing problem paths to be evaluated.")
     parser.add_argument("-r","--root", default="../", type=str, help="where the data is stored.")
     parser.add_argument("-s","--start", default=0, type=int)
