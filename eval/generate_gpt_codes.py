@@ -212,9 +212,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Run a tranined model to generate Python code.")
     parser.add_argument("--arch", default="gpt2", choices=transformers.GPT2_PRETRAINED_MODEL_ARCHIVE_LIST)
-    parser.add_argument("-t","--test_loc", default="~/apps-beta/data_split/test.json", type=str)
+    parser.add_argument("-t","--test_loc", default="~/apps/data_split/test.json", type=str)
     parser.add_argument("-r","--root", default="../", type=str, help="where the data is stored.")
-    parser.add_argument("-l","--load", default="~/apps-beta/models/checkpoints/final", type=str)
+    parser.add_argument("-l","--load", default="~/apps/models/checkpoints/final", type=str)
     parser.add_argument("--peeking", default=0.0, type=float)
     parser.add_argument("--num-beams", default=5, type=int)
     parser.add_argument("-s","--start", default=0, type=int)
