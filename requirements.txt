@@ -1,3 +1,4 @@
+# Used for evaluation and some common for train too
 numpy
 pyext>=0.7
 sacrebleu # we used 1.5.1
@@ -6,3 +7,6 @@ tensorflow # requires tensorflow 2.0 or above for transformers
 torch>=1.7
 transformers>=4 
 
+# Used during training
+deepspeed>=0.4.0
+tensorboardX>=2.2
