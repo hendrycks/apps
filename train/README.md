@@ -6,9 +6,9 @@ We use the following command to run and train.  Note the configuration file is c
 
     USE_TF=NO deepspeed tune_apps_gpt.py  \
     --save-dir=/path/to/save_dir  \
-    --load=/data/sauravkadavath/gcp/megagpu/gpt2_1500_codelm_deepspeed_megagpu__CONT/checkpoint-4350 \
-    --apps-train-files /data/hendrycks/apps-beta/train \
-    --apps-dataroot /data/hendrycks/apps-beta/train/ \
+    --load=/path/to/model \  # Can be used to restart from checkpoint
+    --apps-train-files ~/apps/train \
+    --apps-dataroot ~/apps/train/ \
     --grad-acc-steps=8 \
     --epochs=10 \
     --fp16 \
