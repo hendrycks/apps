@@ -62,16 +62,6 @@ def replace_inline_tabs(content, config):
 
 
 def run(fd_in, fd_out, config):
-    from reindent_4_spaces import Reindenter
-    import io
-    
-    inter = io.StringIO()
-    ri = Reindenter(fd_in)
-    ri.run()
-    ri.write(inter)
-    fd_in = inter
-    fd_in.seek(0)
-
     while True:
         line = fd_in.readline()
         if not line:
@@ -101,7 +91,6 @@ def run(fd_in, fd_out, config):
 
         line = (newindent * level) + content
         print(line, file=fd_out)
-        # print(config)
 
 
 def run_files(filenames, config):
