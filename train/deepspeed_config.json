@@ -23,6 +23,7 @@
     "steps_per_print": 2000,
     "wall_clock_breakdown": false,
     "dump_state": false, 
+    "train_batch_size": 8,
 
     "optimizer": {
         "type": "AdamW",
