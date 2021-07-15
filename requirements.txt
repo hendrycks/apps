@@ -6,6 +6,7 @@ sacremoses # we used 0.0.45
 tensorflow # requires tensorflow 2.0 or above for transformers
 torch>=1.7
 transformers>=4 
+psutil # we used 5.7.0
 
 # Used during training
 deepspeed>=0.4.0
