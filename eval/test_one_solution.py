@@ -44,7 +44,7 @@ def print_results(results, args):
 
 def eval_and_save_problems(args):
     with open(args.test_loc, "r") as f:
-        problems = json.load(f)
+        problems = sorted(json.load(f))
 
     print(len(problems))
     gpt_codes = {}
