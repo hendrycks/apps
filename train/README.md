@@ -2,6 +2,8 @@
 
 ## How to train
 
+First use `apps_create_split.py` to create the `train.json` and `test.json`. Note the paths specified in `apps_create_split.py` should point to relative paths from training directory or absolute paths.
+
 We use the following command to run and train.  Note the configuration file is called deepspeed_config.json.
 
     USE_TF=NO deepspeed tune_apps_gpt.py  \
