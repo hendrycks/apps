@@ -25,8 +25,8 @@ def print_results(results, args):
     all_correct = []
     for index in results:
        res.extend(results[index])
-       per_prob_res.append(np.mean(results[index]))
-       all_correct.append(np.all(results[index]))
+       per_prob_res.append(np.mean(results[index] > 0))
+       all_correct.append(np.all(results[index] > 0))
     tmp_results = res
     compile_errors = len(tmp_results[tmp_results==-2])
     runtime_errors = len(tmp_results[tmp_results==-1])
