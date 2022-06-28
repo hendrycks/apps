@@ -14,6 +14,10 @@ For other benchmarks of enormous Transformers, see a dataset which tests ability
 
 The training instructions are specified in [train/README](apps/train/README.md) and similarly the evaluation instructions are specified in [eval/README](apps/eval/README.md).
 
+### Hugging Face
+
+The dataset is also available in [Hugging Face datasets](https://huggingface.co/datasets/codeparrot/apps) under apps.
+
 ## Citation
 
 If you find this useful in your research, please consider citing
