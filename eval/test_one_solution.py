@@ -24,14 +24,13 @@ def print_results(results, args):
     per_prob_res = []
     all_correct = []
     for index in results:
-       res.extend(np.array(results[index]))
-       per_prob_res.append(np.mean(results[index] > 0))
-       all_correct.append(np.all(results[index] > 0))
-    tmp_results = np.array(res)
-    compile_errors = len(tmp_results[tmp_results==-2])
-    runtime_errors = len(tmp_results[tmp_results==-1])
-    failures = len(tmp_results[tmp_results==False])
-    successes = len(tmp_results[tmp_results==True])
+        var = np.array(results[index])
+        res.extend(var)
+        per_prob_res.append(np.mean(var)>0)
+        all_correct.append(np.all(var)>0)
+    compile_errors = len([e for e in res if -2 in e])
+    # we count runtime for multiple tests as one
+    runtime_errors = len([e for e in res if -1 in e])
     total_testcases = len(res)
     if args.debug:
         print(f"number of compile errors = {compile_errors} avg = {compile_errors / total_testcases }")
