@@ -1,38 +1,49 @@
 """
 Run solutions from one problem.
 """
-
-import io
+import argparse
 import json
-import logging
-import math
 import numpy as np
 import os
 import pprint
-import sys
 import testing_util as test_util
-import time
 
 # for timing debugging
 from datetime import datetime, date
 from tqdm import tqdm
 
-from typing import List
+from types import SimpleNamespace
+from typing import Dict
 
-def print_results(results, args):
+
+EXAMPLE_RESULTS = {"0": [[-2]],"1": [[False,False,False]],"2": [[True,True]],"3": [[False,True,False,True,False,False,False,True,False,True,False,True,True,True,False,True]],"4": [[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]]}
+EXAMPLE_ARGS = SimpleNamespace(debug=True)
+
+def print_results(results: Dict, args:argparse.Namespace=None):
+    """
+    Given the results evaluated against the testcases we output some statistics.
+
+    >>> print_results(EXAMPLE_RESULTS, EXAMPLE_ARGS)
+    number of compile errors = 1 avg = 0.2
+    number of runtime errors = 1 avg = 0.2
+    number of test cases run = 5
+    Test Case Average (average accuracy over problems) = 0.3
+    Strict Accuracy (all test cases passed / total problems) = 0.2
+    """
     res = []
     per_prob_res = []
     all_correct = []
     for index in results:
-        var = np.array(results[index])
-        res.extend(var)
-        per_prob_res.append(np.mean(var)>0)
-        all_correct.append(np.all(var)>0)
+        problem_results = np.asarray(results[index])
+        res.extend(problem_results)
+        per_prob_res.append(np.mean(problem_results > 0))
+        all_correct.append(np.all(problem_results > 0))
+
+    # We count both compile errors and runtime errors for multiple tests as one error.
     compile_errors = len([e for e in res if -2 in e])
-    # we count runtime for multiple tests as one
     runtime_errors = len([e for e in res if -1 in e])
     total_testcases = len(res)
-    if args.debug:
+    if args and args.debug:
         print(f"number of compile errors = {compile_errors} avg = {compile_errors / total_testcases }")
         print(f"number of runtime errors = {runtime_errors} avg = {runtime_errors / total_testcases}")
         print(f"number of test cases run = {total_testcases}")
@@ -157,7 +168,8 @@ def main(args):
 
 
 if __name__ == "__main__":
-    import argparse
+    import doctest
+    doctest.testmod()
 
     parser = argparse.ArgumentParser(description="Testing a Language Model on Python Code")
     parser.add_argument("-t","--test_loc", default="../data_split/test.json", type=str, help="path to the json containing problem paths to be evaluated.")
