@@ -156,6 +156,9 @@ def run_test(prob_path:str=None, problem_list:List[str]=None, prob_index:int=Non
     if test is None:
         return in_outs
     elif test is not None:
+        # Disable functionalities that can make destructive changes to the test.
+        reliability_guard
+        
         results = []
         sol = "import sys\nimport time\nimport itertools\nfrom itertools import accumulate, product, permutations, combinations\nimport collections\nfrom collections import Counter, OrderedDict, deque, defaultdict, ChainMap\nfrom functools import lru_cache\nimport math\nfrom math import sqrt, sin, cos, tan, ceil, fabs, floor, gcd, exp, log, log2\nimport fractions\nfrom typing import List, Tuple\nimport numpy as np\nimport random\nimport heapq\nfrom heapq import *\n"
         if debug:
