@@ -6,6 +6,7 @@ import json
 import numpy as np
 import os
 import pprint
+import multiprocessing
 import testing_util as test_util
 
 # for timing debugging
@@ -18,6 +19,7 @@ from typing import Dict
 
 EXAMPLE_RESULTS = {"0": [[-2]],"1": [[False,False,False]],"2": [[True,True]],"3": [[False,True,False,True,False,False,False,True,False,True,False,True,True,True,False,True]],"4": [[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]]}
 EXAMPLE_ARGS = SimpleNamespace(debug=True)
+TIMEOUT = 10
 
 def print_results(results: Dict, args:argparse.Namespace=None):
     """
@@ -50,6 +52,30 @@ def print_results(results: Dict, args:argparse.Namespace=None):
 
     print(f"Test Case Average (average accuracy over problems) = {np.mean(per_prob_res)}")
     print(f"Strict Accuracy (all test cases passed / total problems) = {np.mean(all_correct)}")
+
+
+def check_correctness(prob_path, generation, timeout, debug):
+    """Check correctness of code generation with a global timeout.
+    The global timeout is to catch some extreme/rare cases not handled by the timeouts
+    inside `run_test`"""
+    def _temp_run(prob_path, generation, debug, result):
+        result.append(test_util.run_test(prob_path=prob_path, test=generation, debug=debug))
+
+    manager = multiprocessing.Manager()
+    result = manager.list()
+    p = multiprocessing.Process(target=_temp_run, args=(prob_path, generation, debug, result))
+    p.start()
+    p.join(timeout=timeout + 1)
+    if p.is_alive():
+        p.kill()
+    if not result:
+        # Reamark: ideally we would consider that all tests failed but we can't access number of tests here easily
+        # so we use 21=the average number of tests for a smaple in the test split instead 
+        avg_number_tests = 21
+        result = [[-1] * avg_number_tests]
+        if debug:
+            print(f"global timeout")
+    return result[0]
 
 
 def eval_and_save_problems(args):
@@ -113,7 +139,7 @@ def eval_and_save_problems(args):
                 print(f"\nTesting solution {o_idx}")
             curr_res = [-2]
             try:
-                curr_res = test_util.run_test(prob_path=prob_path, test=o, debug=args.debug)
+                curr_res = check_correctness(prob_path=prob_path, generation=o, timeout=TIMEOUT, debug=args.debug)
                 fixed = []
                 for e in curr_res:
                     if isinstance(e, np.ndarray):
