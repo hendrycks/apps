@@ -12,7 +12,7 @@ For other benchmarks of enormous Transformers, see a dataset which tests ability
 
 ## How to Use
 
-The training instructions are specified in [train/README](apps/train/README.md) and similarly the evaluation instructions are specified in [eval/README](apps/eval/README.md).
+The training instructions are specified in [train/README](train/README.md) and similarly the evaluation instructions are specified in [eval/README](eval/README.md).
 
 ### Hugging Face
 
