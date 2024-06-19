@@ -7,12 +7,14 @@ import numpy as np
 import os
 import pprint
 import multiprocessing
+import time
 import testing_util as test_util
 
 # for timing debugging
 from datetime import datetime, date
 from tqdm import tqdm
 
+from datasets import load_dataset
 from types import SimpleNamespace
 from typing import Dict
 
@@ -53,37 +55,53 @@ def print_results(results: Dict, args:argparse.Namespace=None):
     print(f"Test Case Average (average accuracy over problems) = {np.mean(per_prob_res)}")
     print(f"Strict Accuracy (all test cases passed / total problems) = {np.mean(all_correct)}")
 
+# Dummy `test_util.run_test` function for debugging multiprocessing.
+def run_test(problem, test, debug):
+    time.sleep(1)  # Simulate some work
+    return [1]  # Dummy test result
 
-def check_correctness(prob_path, generation, timeout, debug):
+def check_correctness(problem, generation, timeout, debug):
     """Check correctness of code generation with a global timeout.
     The global timeout is to catch some extreme/rare cases not handled by the timeouts
     inside `run_test`"""
-    def _temp_run(prob_path, generation, debug, result):
-        result.append(test_util.run_test(prob_path=prob_path, test=generation, debug=debug))
+    def _temp_run(problem, generation, debug, result):
+        try:
+            if debug:
+                print(f"Running test for problem: {problem}")
+            result.append(test_util.run_test(problem=problem, test=generation, debug=debug))
+            # Useful for debugging the multiprocessing.
+            # result.append(run_test(problem=problem, test=generation, debug=debug))
+            if debug:
+                print(f"Test completed with result: {result}")
+        except Exception as e:
+            if debug:
+                print(f"Error in _temp_run: {e}")
 
     manager = multiprocessing.Manager()
     result = manager.list()
-    p = multiprocessing.Process(target=_temp_run, args=(prob_path, generation, debug, result))
+    p = multiprocessing.Process(target=_temp_run, args=(problem, generation, debug, result))
     p.start()
     p.join(timeout=timeout + 1)
     if p.is_alive():
+        if debug:
+            print(f"Process is still alive. Killing the process.")
         p.kill()
     if not result:
-        # Reamark: ideally we would consider that all tests failed but we can't access number of tests here easily
+        # Remark: ideally we would consider that all tests failed but we can't access number of tests here easily
         # so we use 21=the average number of tests for a smaple in the test split instead 
         avg_number_tests = 21
         result = [[-1] * avg_number_tests]
         if debug:
-            print(f"global timeout")
+            print(f"Global timeout occurred, returning default result.")
+    if debug:
+        print(f"Final result: {result}")
     return result[0]
 
 
 def eval_and_save_problems(args):
-    with open(args.test_loc, "r") as f:
-        problems = sorted(json.load(f))
+    problems = load_dataset("codeparrot/apps", split=f"{args.split}")
 
-    print(len(problems))
-    gpt_codes = {}
+    codes = {}
     gpt_bleu = {}
     gpt_codebleu = {}
     results = {}
@@ -95,13 +113,14 @@ def eval_and_save_problems(args):
         results_loc = os.path.join(args.save, f"all_results.json") 
     else:
         results_loc = os.path.join(args.save, f"{args.start}-{args.end}_results.json") 
-    print(codes_loc, results_loc)
+    # print(codes_loc, results_loc)
 
     with open(codes_loc, "r") as f: 
-        gpt_codes = json.load(f)
+        codes = json.load(f)
 
+    # Only do the problems that are specified.
     if args.index:
-        problems = [problems[args.index]]
+        problems = load_dataset("codeparrot/apps", split=f"{args.split}[{args.index}]")
     else:
         if args.start > len(problems) or args.start < 0:
             print(f"start index {args.start} > number of problems {len(problems)}")
@@ -111,35 +130,38 @@ def eval_and_save_problems(args):
             end = len(problems)
         else:
             end = args.end
-        problems = problems[start:end]
+        problems = load_dataset("codeparrot/apps", split=f"{args.split}[{start}:{end}]")
 
     if args.stop_early:
-        problems = problems[:args.stop_early]
+        problems = load_dataset("codeparrot/apps", split=f"{args.split}[{start}:{args.stop_early}]")
 
     # main eval loop
     for index, problem in enumerate(tqdm(problems)):
         try:
-            if args.debug:
-                print(f"\n\nproblem path = {problem}")
-            output_str = gpt_codes[str(index+args.start)]
+            if isinstance(codes, dict):
+                output_strings = codes[str(index+args.start)]
+            else:
+                output_strings = codes[index+args.start]
         except:
-            print("CANNOT FIND OUTPUT_STR FOR", problem)
+            # print("CANNOT FIND OUTPUT_STR FOR", problem)
             continue
-        prob_path = os.path.join(args.root, problem)
-
-        with open(os.path.join(prob_path, "solutions.json"), "r") as f:
-            sols = json.load(f)
         
+        problem["solutions"] = json.loads(problem["solutions"])
+        problem["input_output"] = json.loads(problem["input_output"])
+        sols = problem["solutions"]
+
         if not os.path.exists(args.save):
             os.makedirs(args.save)
 
         res = []
-        for o_idx, o in enumerate(output_str):
+        if isinstance(output_strings, str):
+            output_strings = [output_strings]
+        for generation_idx, generation in enumerate(output_strings):
             if args.debug:
-                print(f"\nTesting solution {o_idx}")
+                print(f"\nTesting solution {generation_idx}, {generation=}")
             curr_res = [-2]
             try:
-                curr_res = check_correctness(prob_path=prob_path, generation=o, timeout=TIMEOUT, debug=args.debug)
+                curr_res = check_correctness(problem, generation=generation, timeout=TIMEOUT, debug=args.debug)
                 fixed = []
                 for e in curr_res:
                     if isinstance(e, np.ndarray):
@@ -158,7 +180,7 @@ def eval_and_save_problems(args):
                 res.append(curr_res)
 
         if args.debug:
-            print(f"\nHow to read results [-2] = compile error, [-1] = runtime error [False] = failed test case [True] = passed test case")
+            print(f"\nHow to read results [-2] = compile error, [-1] = runtime error, [False] = failed test case, [True] = passed test case")
             #print(f"results = {res}")
  
         results[index+args.start+args.index] = res
@@ -180,22 +202,29 @@ def main(args):
 
     if args.print_results:
         results = {}
-        codes_loc = os.path.join(args.save, f"all_codes.json")
-        if os.path.exists(codes_loc):
+        results_loc = os.path.join(args.save, f"all_results.json")
+        if os.path.exists(results_loc):
             results_loc = os.path.join(args.save, f"all_results.json") 
+        elif os.path.exists(f"{args.start}-{args.end}_results.json"):
+            results_loc = os.path.join(args.save, f"{args.start}-{args.end}_results.json")
         else:
-            results_loc = os.path.join(args.save, f"{args.start}-{args.end}_results.json") 
+            print("No results to print exiting.")
+            exit()
+
         with open(results_loc, "r") as f: 
             results = json.load(f)
-    else:
+        print_results(results, args)
+        exit()
+
+    if not args.skip_evals:
         results = eval_and_save_problems(args)
 
     print_results(results, args)
 
 
 if __name__ == "__main__":
-    import doctest
-    doctest.testmod()
+    # import doctest
+    # doctest.testmod()
 
     parser = argparse.ArgumentParser(description="Testing a Language Model on Python Code")
     parser.add_argument("-t","--test_loc", default="../data_split/test.json", type=str, help="path to the json containing problem paths to be evaluated.")
@@ -204,8 +233,10 @@ if __name__ == "__main__":
     parser.add_argument("-e","--end", default=None, type=int, help="If you want to evaluate a subset of problems specify start and ending index. File with start and ending prefix must exist typically used with batch evaluation.")
     parser.add_argument("-i", "--index", default=0, type=int)
     parser.add_argument("-p", "--print_results", action="store_true", help="If you have already evaluated the results and only want to print them.")
+    parser.add_argument("--skip_evals", action="store_true", help="If you want to skip the evals similar to print results.")
     parser.add_argument("-d", "--debug", action="store_true")
     parser.add_argument("--save", type=str, default="./results", help="Where the evaluated data is loaded from and results saved to.")
+    parser.add_argument("--split", type=str, default="test", help="What split to use.")
     parser.add_argument("--stop-early", default=None, type=int)
  
     args = parser.parse_args()

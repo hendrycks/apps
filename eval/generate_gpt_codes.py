@@ -15,7 +15,9 @@ import time
 import transformers
 import torch
 
+from datasets import load_dataset
 from reindent import run as run_reindent
+from transformers import AutoTokenizer, AutoModelWithLMHead, AutoModelForCausalLM
 
 # for timing and debugging
 from datetime import datetime, date
@@ -48,24 +50,19 @@ def reindent_code(codestr):
 
     return ret.getvalue()
 
-def generate_prompt(args, test_case_path, prompt_path, solutions_path, tokenizer, starter_path=None):
+def generate_prompt(args, test_case, prompt, solutions, tokenizer, starter_code=None):
     _input = "\nQUESTION:\n"
-    with open(prompt_path, "r") as f:
-        data = f.readlines()
-        data = "".join(data)
+    data = prompt
     _input += data
-    if starter_path != None:
-        with open(starter_path, "r") as f:
-            data = f.readlines()
-            data = "".join(data)
-            data = "\n" + data #+ "\n"
+    if starter_code != None:
+        data = starter_code
+        data = "\n" + data #+ "\n"
         _input += data
     else:
         #_input += "\n\n"
         pass
 
-    with open(test_case_path, "r") as f:
-        data = json.load(f)
+    data = test_case
     if not data.get("fn_name"):
         _input += "\nUse Standard Input format"#\n"
     else:
@@ -77,8 +74,7 @@ def generate_prompt(args, test_case_path, prompt_path, solutions_path, tokenizer
         # Need to do some peeking. 
 
         # Read one example solution
-        with open(solutions_path, 'r') as f:
-            sols = json.load(f)
+        sols = solutions
 
         # Choose the shortest solution for the model to use.
         # This is so we can conserve tokens (1024 max)
@@ -108,9 +104,7 @@ def main(args):
     argsdict = vars(args)
     print(pprint.pformat(argsdict))
 
-    with open(args.test_loc, "r") as f:
-        problems = json.load(f)
-    problems = sorted(problems) # Pin some ordering
+    problems = load_dataset("codeparrot/apps", split=f"{args.split}")
 
     gpt_codes = {}
     if not os.path.exists(args.save):
@@ -122,7 +116,7 @@ def main(args):
 
     # Only do the problems that are specified.
     if args.index:
-        problems = [problems[args.index]]
+        problems = load_dataset("codeparrot/apps", split=f"{args.split}[{args.index}]")
     else:
         if args.start > len(problems) or args.start < 0:
             print(f"start index {args.start} > number of problems {len(problems)}")
@@ -132,34 +126,36 @@ def main(args):
             end = len(problems)
         else:
             end = args.end
-        problems = problems[start:end]
+        problems = load_dataset("codeparrot/apps", split=f"{args.split}[{start}:{end}]")
 
-    # Tokenizer
-    tokenizer = transformers.GPT2Tokenizer.from_pretrained(args.arch)
 
-    # Set up model
-    print("Loading model...")
-    model = transformers.GPT2LMHeadModel.from_pretrained(args.load)
-    model.cuda()
-    print(f"Loaded {args.load}.")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    if args.load:
+        # Set up model
+        # Tokenizer
+        tokenizer = transformers.GPT2Tokenizer.from_pretrained(args.arch)
+        print("Loading model...")
+        model = transformers.GPT2LMHeadModel.from_pretrained(args.load)
+        model.to(device)
+        print(f"Loaded {args.load}.")
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(args.arch)
+        model = AutoModelForCausalLM.from_pretrained(args.arch, device_map="auto").eval()
 
     # main eval loop
     for index, problem in enumerate(tqdm(problems)):
-        prob_path = os.path.join(args.root, problem)
-        if args.debug:
-            print(f"problem path = {prob_path}")
-
-        test_case_path = os.path.join(prob_path, "input_output.json")
-        prompt_path = os.path.join(prob_path, "question.txt")
-        starter_path = os.path.join(prob_path, "starter_code.py")
-        solutions_path = os.path.join(prob_path, "solutions.json")
-        if not os.path.exists(starter_path):
-                starter_path = None
-        if not os.path.exists(test_case_path) or not os.path.exists(prompt_path):
-            continue
+        problem["solutions"] = json.loads(problem["solutions"])
+        problem["input_output"] = json.loads(problem["input_output"])
+        test_case = problem["input_output"]
+        prompt = problem["question"]
+        starter_code = problem["starter_code"]
+        solutions = problem["solutions"]
+        if not starter_code:
+            starter_code = None
 
         # Read the question in
-        prompt_text, sample_sol = generate_prompt(args, test_case_path, prompt_path, solutions_path, tokenizer, starter_path)
+        prompt_text, sample_sol = generate_prompt(args, test_case, prompt, solutions, tokenizer, starter_code)
         if args.debug:
             print("PROMPT_TEXT:")
             print(prompt_text)
@@ -168,7 +164,7 @@ def main(args):
         start = time.time()
         try:
             with torch.no_grad():
-                input_ids = torch.LongTensor(tokenizer.encode(prompt_text, verbose=False)).unsqueeze(0).cuda()
+                input_ids = torch.LongTensor(tokenizer.encode(prompt_text, verbose=False)).unsqueeze(0).to(device)
                 output_ids = model.generate(
                     input_ids,
                     num_beams=args.num_beams,
@@ -211,16 +207,17 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Run a tranined model to generate Python code.")
-    parser.add_argument("--arch", default="gpt2", choices=transformers.GPT2_PRETRAINED_MODEL_ARCHIVE_LIST)
-    parser.add_argument("-t","--test_loc", default="~/apps/data_split/test.json", type=str)
+    parser.add_argument("--arch", default="gpt2")
+    parser.add_argument("-t","--test_loc", default="~/apps/data_split/test.json", type=str, help="path to the test folder.")
     parser.add_argument("-r","--root", default="../", type=str, help="where the data is stored.")
-    parser.add_argument("-l","--load", default="~/apps/models/checkpoints/final", type=str)
+    parser.add_argument("-l","--load", default="", type=str)
     parser.add_argument("--peeking", default=0.0, type=float)
     parser.add_argument("--num-beams", default=5, type=int)
     parser.add_argument("-s","--start", default=0, type=int)
     parser.add_argument("-e","--end", default=None, type=int)
     parser.add_argument("-i", "--index", default=None, type=int)
     parser.add_argument("-d", "--debug", action="store_true")
+    parser.add_argument("--split", type=str, default="test", help="What split to use.")
     parser.add_argument("--save", type=str, default="./results")
  
     args = parser.parse_args()
