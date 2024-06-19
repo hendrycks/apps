@@ -119,40 +119,33 @@ def get_solutions(problem_list, prob_index):
     return sols
 
 
-def run_test(prob_path:str=None, problem_list:List[str]=None, prob_index:int=None, 
+def run_test(problem=None, problem_list:List[str]=None, prob_index:int=None, 
         test:str=None, debug:bool=False):
     """
     if test is not None it'll try to run the code.
     otherwise it'll just return an input and output pair.
     """
-    if prob_path is None and problem_list is None:
-        print("please provide either prob_path or problem_list")
-        exit()
 
     if debug:
         print(f"start = {datetime.now().time()}")
-    if prob_path is not None:
-        root = prob_path
-    elif problem_list is not None:
+
+    if problem_list is not None:
         root = problem_list[prob_index]
 
-    if os.path.exists(os.path.join(root, "input_output.json")):
-        with open(os.path.join(root, "input_output.json")) as f:
-            in_outs = json.load(f)
-            if debug:
-                print(f"test cases json = {in_outs['inputs']} {in_outs['outputs']}")
-            
-            if in_outs.get("fn_name") is None:
-                which_type = CODE_TYPE.standard_input  # Standard input
-                method_name = None
-            else:
-                which_type = CODE_TYPE.call_based  # Call-based
-                method_name = in_outs["fn_name"]
+
+    in_outs = problem["input_output"]
+    if debug:
+        print(f"test cases json = {in_outs['inputs']} {in_outs['outputs']}")
+    
+    if in_outs.get("fn_name") is None:
+        which_type = CODE_TYPE.standard_input  # Standard input
+        method_name = None
+    else:
+        which_type = CODE_TYPE.call_based  # Call-based
+        method_name = in_outs["fn_name"]
     if debug:
         print(f"loaded json = {datetime.now().time()}")
  
-    #else:
-    #    continue
     if test is None:
         return in_outs
     elif test is not None:
@@ -600,9 +593,7 @@ def reliability_guard(maximum_memory_bytes=None):
 def main(args):
     print(args)
     problem_list = sorted(get_valid_problems(args.source))
-    print(f"number of problems = {len(problem_list)}")
     prob_index = args.number
-    print(f"problem is {problem_list[prob_index]}")
 
     # This checks it correctly loaded. remove this later
     assert prob_index < len(problem_list)
